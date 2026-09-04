@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111111">
+  <meta name="description" content="Extractor local de circulaciones y turnos para SIM+.">
+  <title>SIM+ · Extractor de turnos</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span>SIM+</span><small>EXTRACTOR</small></div>
+    <div class="local-badge" title="Los documentos se procesan en este dispositivo">
+      <span aria-hidden="true"></span> LOCAL · SIN ENVÍO
+    </div>
+  </header>
+
+  <main>
+    <section class="workspace" aria-labelledby="input-title">
+      <div class="section-heading">
+        <div><span class="step">01</span><h1 id="input-title">Documento</h1></div>
+        <p>PDF con texto, PDF escaneado o capturas de pantalla.</p>
+      </div>
+
+      <div class="input-grid">
+        <label class="dropzone" id="dropzone" for="file-input">
+          <input id="file-input" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" multiple>
+          <span class="drop-icon" aria-hidden="true">＋</span>
+          <strong>Seleccionar PDF o imágenes</strong>
+          <small>También puedes arrastrarlas aquí. Un PDF o varias imágenes ordenadas.</small>
+          <span class="file-summary" id="file-summary">Ningún archivo seleccionado</span>
+        </label>
+
+        <div class="setup-panel">
+          <fieldset class="engine-choice">
+            <legend>Motor</legend>
+            <label><input type="radio" name="engine" value="auto" checked><span>AUTO</span></label>
+            <label><input type="radio" name="engine" value="text"><span>TEXTO PDF</span></label>
+            <label><input type="radio" name="engine" value="ocr"><span>OCR</span></label>
+          </fieldset>
+
+          <label class="field compact">
+            <span>Páginas preliminares</span>
+            <input id="page-offset" type="number" min="0" value="24" inputmode="numeric">
+            <small>Desfase entre la página impresa y la página física del PDF.</small>
+          </label>
+
+          <div class="privacy-note">
+            <strong>Procesamiento privado</strong>
+            <span>El archivo permanece en este dispositivo. La primera lectura OCR puede tardar.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ranges-panel">
+        <div class="panel-title">
+          <div>
+            <h2>Bloques de servicio</h2>
+            <p>Para imágenes, el número de página corresponde a su orden de selección.</p>
+          </div>
+          <button class="button ghost" id="add-range" type="button">＋ AÑADIR BLOQUE</button>
+        </div>
+        <div class="range-table-wrap">
+          <table class="range-table">
+            <thead><tr><th>Desde</th><th>Hasta</th><th>Servicio A</th><th>Servicio B</th><th><span class="sr-only">Eliminar</span></th></tr></thead>
+            <tbody id="range-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="button primary" id="analyze" type="button" disabled>ANALIZAR DOCUMENTO</button>
+        <button class="button danger ghost hidden" id="cancel" type="button">DETENER</button>
+        <div class="progress-wrap hidden" id="progress-wrap" aria-live="polite">
+          <div class="progress-meta"><span id="progress-label">Preparando…</span><strong id="progress-percent">0%</strong></div>
+          <div class="progress-track"><span id="progress-bar"></span></div>
+        </div>
+      </div>
+      <div class="notice hidden" id="notice" role="status"></div>
+    </section>
+
+    <section class="workspace review hidden" id="review-section" aria-labelledby="review-title">
+      <div class="section-heading">
+        <div><span class="step">02</span><h2 id="review-title">Revisión</h2></div>
+        <p>Corrige cualquier lectura antes de generar los archivos.</p>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="review-toolbar">
+        <label class="search-field"><span class="sr-only">Buscar</span><input id="search" type="search" placeholder="Buscar circulación, turno o página"></label>
+        <label class="issue-filter"><input id="issues-only" type="checkbox"><span>SOLO INCIDENCIAS</span></label>
+        <button class="button ghost" id="add-record" type="button">＋ AÑADIR ASIGNACIÓN</button>
+      </div>
+
+      <div class="review-table-wrap">
+        <table class="review-table">
+          <thead>
+            <tr><th>Origen</th><th>Servicio A</th><th>Turno A</th><th>Servicio B</th><th>Turno B</th><th>Circulación</th><th>Lectura</th><th></th></tr>
+          </thead>
+          <tbody id="review-body"></tbody>
+        </table>
+      </div>
+      <p class="empty-state hidden" id="empty-review">No hay filas que coincidan con el filtro.</p>
+
+      <div class="special-merge-panel">
+        <div>
+          <strong>Actualizar servicios especiales</strong>
+          <p>Carga el JSON que ya está en GitHub para conservarlo y añadirle las nuevas asignaciones.</p>
+        </div>
+        <label class="button ghost file-button">
+          CARGAR JSON ACTUAL
+          <input id="special-base-input" type="file" accept="application/json,.json">
+        </label>
+        <div class="base-file-state">
+          <span id="special-base-summary">Sin archivo base · se creará uno nuevo</span>
+          <button id="clear-special-base" class="text-button hidden" type="button">Quitar</button>
+        </div>
+        <label class="conflict-policy">
+          <span>Si ya existe con otro turno</span>
+          <select id="special-conflict-policy">
+            <option value="review">Bloquear y revisar</option>
+            <option value="new">Usar la nueva extracción</option>
+            <option value="existing">Conservar el archivo actual</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="export-panel">
+        <div>
+          <span class="step">03</span>
+          <h2>Exportación</h2>
+          <p id="export-status">Revisa las incidencias antes de exportar.</p>
+        </div>
+        <div class="export-actions">
+          <button class="button primary" id="export-regular" type="button">JSON PARA SIM+</button>
+          <button class="button special" id="export-special" type="button">JSON SERVICIOS ESPECIALES</button>
+          <button class="button ghost" id="export-audit" type="button">AUDITORÍA</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="source-dialog">
+    <div class="dialog-header"><strong id="dialog-title">Origen</strong><button id="close-dialog" type="button" aria-label="Cerrar">×</button></div>
+    <div class="source-canvas-wrap"><canvas id="source-canvas"></canvas></div>
+    <p id="dialog-caption"></p>
+  </dialog>
+
+  <template id="range-row-template">
+    <tr>
+      <td><input class="range-start" type="number" min="1" inputmode="numeric" aria-label="Página inicial"></td>
+      <td><input class="range-end" type="number" min="1" inputmode="numeric" aria-label="Página final"></td>
+      <td><input class="service-a" type="text" maxlength="3" inputmode="numeric" aria-label="Servicio A"></td>
+      <td><input class="service-b" type="text" maxlength="3" inputmode="numeric" aria-label="Servicio B"></td>
+      <td><button class="icon-button remove-range" type="button" aria-label="Eliminar bloque">×</button></td>
+    </tr>
+  </template>
+
+  <script src="./vendor/tesseract/tesseract.min.js"></script>
+  <script type="module" src="./assets/app.js"></script>
+</body>
+</html>

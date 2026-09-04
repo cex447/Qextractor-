@@ -1,0 +1,19 @@
+{
+  "name": "SIM+ Extractor de turnos",
+  "short_name": "SIM+ Extractor",
+  "description": "Extracción local de circulaciones y turnos desde PDF e imágenes.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111111",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
