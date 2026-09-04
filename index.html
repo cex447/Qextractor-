@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111111">
-  <meta name="description" content="Extractor local de circulaciones y turnos para SIM+.">
+  <meta name="description" content="Extractor local de circulaciones y turnos desde libros y circulares para SIM+.">
   <title>SIM+ · Extractor de turnos</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
@@ -25,12 +25,18 @@
         <p>PDF con texto, PDF escaneado o capturas de pantalla.</p>
       </div>
 
+      <fieldset class="document-choice">
+        <legend>Tipo de documento</legend>
+        <label><input type="radio" name="document-type" value="circular" checked><span><strong>CIRCULAR DE SERVICIO</strong><small>Una o varias fechas; tablas TORN y turnos modificados.</small></span></label>
+        <label><input type="radio" name="document-type" value="book"><span><strong>LIBRO DE ITINERARIOS</strong><small>Bloques ordinarios 0/100, 400/500, 200/300 y 800/900.</small></span></label>
+      </fieldset>
+
       <div class="input-grid">
         <label class="dropzone" id="dropzone" for="file-input">
           <input id="file-input" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" multiple>
           <span class="drop-icon" aria-hidden="true">＋</span>
           <strong>Seleccionar PDF o imágenes</strong>
-          <small>También puedes arrastrarlas aquí. Un PDF o varias imágenes ordenadas.</small>
+          <small id="file-help">Puedes seleccionar una o varias circulares PDF. Se analizarán todas sus páginas.</small>
           <span class="file-summary" id="file-summary">Ningún archivo seleccionado</span>
         </label>
 
@@ -42,11 +48,21 @@
             <label><input type="radio" name="engine" value="ocr"><span>OCR</span></label>
           </fieldset>
 
-          <label class="field compact">
-            <span>Páginas preliminares</span>
-            <input id="page-offset" type="number" min="0" value="24" inputmode="numeric">
-            <small>Desfase entre la página impresa y la página física del PDF.</small>
-          </label>
+          <div id="book-config">
+            <label class="field compact">
+              <span>Páginas preliminares</span>
+              <input id="page-offset" type="number" min="0" value="24" inputmode="numeric">
+              <small>Desfase entre la página impresa y la página física del PDF.</small>
+            </label>
+          </div>
+
+          <div id="circular-config">
+            <label class="field compact">
+              <span>Fecha manual de respaldo</span>
+              <input id="fallback-date" type="date">
+              <small>Déjala vacía: sólo se utilizará si la circular no permite leer la fecha.</small>
+            </label>
+          </div>
 
           <div class="privacy-note">
             <strong>Procesamiento privado</strong>
@@ -55,7 +71,7 @@
         </div>
       </div>
 
-      <div class="ranges-panel">
+      <div class="ranges-panel book-only">
         <div class="panel-title">
           <div>
             <h2>Bloques de servicio</h2>
@@ -98,7 +114,7 @@
 
       <div class="review-table-wrap">
         <table class="review-table">
-          <thead>
+          <thead id="review-head">
             <tr><th>Origen</th><th>Servicio A</th><th>Turno A</th><th>Servicio B</th><th>Turno B</th><th>Circulación</th><th>Lectura</th><th></th></tr>
           </thead>
           <tbody id="review-body"></tbody>
@@ -108,8 +124,8 @@
 
       <div class="special-merge-panel">
         <div>
-          <strong>Actualizar servicios especiales</strong>
-          <p>Carga el JSON que ya está en GitHub para conservarlo y añadirle las nuevas asignaciones.</p>
+          <strong id="special-merge-title">Actualizar JSON especial anual</strong>
+          <p id="special-merge-description">Carga el JSON anual actual. Las nuevas fechas y circulaciones se añadirán sin borrar las anteriores.</p>
         </div>
         <label class="button ghost file-button">
           CARGAR JSON ACTUAL
@@ -137,7 +153,7 @@
         </div>
         <div class="export-actions">
           <button class="button primary" id="export-regular" type="button">JSON PARA SIM+</button>
-          <button class="button special" id="export-special" type="button">JSON SERVICIOS ESPECIALES</button>
+          <button class="button special" id="export-special" type="button">JSON ESPECIAL ACTUALIZADO</button>
           <button class="button ghost" id="export-audit" type="button">AUDITORÍA</button>
         </div>
       </div>

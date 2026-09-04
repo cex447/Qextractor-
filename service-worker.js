@@ -1,4 +1,4 @@
-const CACHE = "sim-turnos-extractor-v1";
+const CACHE = "sim-turnos-extractor-v1.1.0";
 const SHELL = [
   "./",
   "./index.html",
@@ -7,6 +7,7 @@ const SHELL = [
   "./assets/styles.css",
   "./assets/app.js",
   "./assets/parser.js",
+  "./assets/circular-parser.js",
   "./assets/pdf-engine.js",
   "./assets/ocr-engine.js",
   "./assets/exporter.js",

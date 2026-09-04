@@ -1,83 +1,90 @@
-# SIM+ Turnos Extractor
+# SIM+ Turnos Extractor 1.1
 
-Aplicación web estática para convertir libros de itinerarios y capturas de tablas en JSON de circulaciones y turnos. Todo el procesamiento se realiza en el navegador: los documentos no se envían a un servidor.
+Aplicación web estática para extraer circulaciones y turnos desde libros de itinerarios, circulares PDF y capturas de pantalla. Todo se procesa en el navegador: los documentos, el JSON existente y los resultados no se envían a ningún servidor.
 
-## Motores incluidos
+## Circulares de servicios especiales
 
-- **Texto PDF:** lee directamente la capa de texto de un PDF y conserva sus coordenadas.
-- **OCR:** procesa PDF escaneado, PNG, JPG y WEBP con Tesseract.js.
-- **Automático:** usa texto cuando la página lo contiene y cambia a OCR cuando está escaneada.
+El modo **Circular de servicio** admite:
 
-La extracción detecta la circulación, la fila `TORN`, los códigos de turno y las variantes por servicio. Omite circulaciones que no empiecen por `A`, `B`, `L`, `D` o `F`, así como aquellas cuya primera cifra sea `8`.
+- una fecha de afectación en una sola hoja;
+- una fecha distribuida entre varias hojas;
+- varias fechas y varias hojas dentro de la misma circular;
+- varias circulares PDF seleccionadas en una misma operación;
+- PDF con capa de texto y PDF escaneados.
 
-## Publicación en GitHub Pages
+La extracción reconoce dos estructuras habituales:
 
-1. Copia **todo el contenido de esta carpeta** en la raíz de un repositorio de GitHub.
-2. En el repositorio, abre **Settings → Pages**.
-3. Selecciona **Deploy from a branch**, la rama correspondiente y la carpeta `/ (root)`.
-4. Abre la URL que te proporcione GitHub Pages.
+- tablas horarias con circulaciones en columnas y una fila `TORN`;
+- hojas de turnos modificados, creados o adicionales, con encabezados como `Q4P14`, `Q4118` o `QRS0` y sus circulaciones debajo.
 
-No abras `index.html` directamente con `file://`: los navegadores bloquean los módulos y el OCR en ese modo. También puedes probarlo con cualquier servidor HTTP estático.
+Los encabezados se normalizan sin la `Q` ni el dígito visual de servicio cuando existe: por ejemplo, `Q4P14` se guarda como `P14` y `Q4118` como `118`. Sólo se conservan circulaciones `A`, `B`, `L`, `D` o `F` seguidas de tres cifras; se omiten las que empiezan por `8` después de la letra.
 
-## Uso
+La fecha se obtiene de cada apartado de la circular. En servicios nocturnos se conserva el **día operativo indicado por el documento**, aunque algunas circulaciones ocurran pasada la medianoche. La fecha manual de respaldo sólo se usa si no se puede leer ninguna fecha.
 
-1. Adjunta un PDF o un conjunto de imágenes ordenadas.
-2. Elige el motor. En la mayoría de casos, `AUTOMÁTICO` es la mejor opción.
-3. Ajusta el desfase entre la página impresa y la física del PDF. El valor inicial `24` corresponde al libro usado como referencia.
-4. Ajusta los bloques de páginas y servicios. Se aceptan pares como `0/100` y códigos individuales.
-5. Pulsa **Analizar documento**.
-6. Revisa la tabla. Las celdas son editables y el botón **VER ORIGEN** abre el fragmento correspondiente.
-7. Descarga las salidas.
+## Actualizar el JSON especial sin borrar datos
 
-## Actualizar el JSON de servicios especiales
-
-En el bloque **Actualizar servicios especiales** puedes cargar el `sim_turnos_especiales.json` que ya utilizas. Al exportar se conservarán todas sus asignaciones y se incorporarán las nuevas.
-
-Si el mismo par servicio–circulación ya existe con un turno diferente, hay tres opciones:
-
-- **Bloquear y revisar:** no permite descargar hasta que se elija una política o se corrijan los datos.
-- **Usar la nueva extracción:** el turno revisado en la tabla sustituye al anterior.
-- **Conservar el archivo actual:** se ignora el nuevo valor conflictivo; el resto de altas sí se incorpora.
-
-El archivo original no se modifica. La aplicación descarga una copia nueva y combinada para que puedas revisarla antes de subirla a GitHub.
-
-## Archivos generados
-
-- `sim_turnos_servicios.json`: servicios ordinarios `0`, `100`, `200`, `300`, `400`, `500`, `800` y `900`.
-- `sim_turnos_especiales.json`: servicios de tres cifras que comienzan por `6` o `7`, nuevos o combinados con un archivo existente.
-- `sim_turnos_auditoria.json`: filas originales, página, motor, confianza, incidencias y datos corregidos. Está pensado para trazabilidad, no para consumo directo por SIM+.
-
-Los turnos se guardan tal como aparecen (`001`, `S02`, `R30`), sin añadir una `Q`. Cuando no hay servicios especiales, el segundo JSON se genera igualmente con el objeto `servicios` vacío.
-
-## Formato de integración
+El archivo especial es anual y está indexado por fecha operativa:
 
 ```json
 {
-  "schema_version": 1,
-  "tipo": "servicios_ordinarios",
-  "generado": "2026-09-04T00:00:00.000Z",
-  "resumen": {
-    "servicios": 2,
-    "asignaciones": 3
-  },
-  "servicios": {
-    "0": { "D001": "001", "A002": "S02" },
-    "100": { "D001": "323" }
+  "year": 2026,
+  "date_format": "DD/MM/YYYY",
+  "dates": {
+    "11/09/2026": {
+      "D001": "015",
+      "F001": "019"
+    }
   }
 }
 ```
 
-SIM+ debe resolver primero el servicio del día mediante su calendario anual y después consultar `servicios[codigo][circulacion]`. El cambio operativo de día a las 03:00 debe permanecer en SIM+, no en este extractor.
+Flujo recomendado:
 
-## Límites y revisión
+1. Selecciona una o varias circulares PDF.
+2. Pulsa **Analizar documento** y revisa las asignaciones por fecha.
+3. Carga el `sim_turnos_especiales.json` que ya utiliza SIM+.
+4. Descarga **JSON especial actualizado**.
+5. Revisa la copia descargada y súbela después a GitHub.
 
-- El OCR es una ayuda, no una garantía. Revisa especialmente capturas inclinadas, borrosas o recortadas.
-- Los errores y conflictos bloquean la exportación; las advertencias permiten exportar tras revisión.
-- En móviles, un PDF extenso por OCR puede tardar y consumir bastante memoria. Si es posible, procesa solo los bloques necesarios.
-- La aplicación no interpreta horarios ni destinos: únicamente la relación circulación–turno–servicio.
+La aplicación conserva todas las propiedades, fechas y circulaciones anteriores, y añade las nuevas. Si una misma fecha y circulación ya existe con otro turno, permite:
 
-## Actualización de dependencias
+- bloquear la descarga para revisarlo;
+- usar la nueva extracción;
+- conservar el valor del archivo actual.
 
-Las dependencias están copiadas en `vendor/` para evitar servicios externos. Si se sustituyen, conserva sus licencias y actualiza el nombre de caché de `service-worker.js` para que los navegadores descarguen la nueva versión.
+El archivo cargado no se modifica. Siempre se genera una copia nueva. También se admiten JSON donde el mapa de circulaciones está envuelto en `circulations`, `circulaciones`, `trains`, `turns` o `assignments`.
 
-Consulta `THIRD_PARTY_NOTICES.md` para versiones y licencias.
+El JSON especial puede contener cualquier fecha operativa modificada, aunque el servicio base de ese día sea `000`, `100`, `400`, `500`, `600` o `700`. SIM+ debe consultar primero la asignación especial de la fecha y, si no existe, aplicar su comportamiento de ausencia (`Q?`) o la regla acordada en la integración.
+
+## Libro de itinerarios
+
+El modo **Libro de itinerarios** mantiene la extracción de los bloques ordinarios `0/100`, `400/500`, `200/300` y `800/900`, tanto desde PDF como desde imágenes. Permite configurar el desfase de páginas y los rangos.
+
+## Motores locales
+
+- **Automático:** utiliza la capa de texto cuando existe y recurre a OCR en páginas escaneadas.
+- **Texto PDF:** fuerza la lectura de texto y coordenadas del PDF.
+- **OCR:** procesa localmente PDF escaneados, PNG, JPG y WEBP con Tesseract.js.
+
+PDF.js, Tesseract.js, el modelo OCR y sus licencias están incluidos dentro de `vendor/`. No se usan API, analítica, almacenamiento remoto ni dependencias desde CDN.
+
+## Publicación en GitHub Pages
+
+1. Descomprime el ZIP y copia **todo su contenido** en la raíz del repositorio.
+2. En GitHub abre **Settings → Pages**.
+3. Elige **Deploy from a branch**, la rama correspondiente y la carpeta `/ (root)`.
+4. Abre la URL que proporciona GitHub Pages.
+
+No abras `index.html` directamente con `file://`, porque el navegador bloqueará los módulos. Para una prueba local, sirve la carpeta con cualquier servidor HTTP estático.
+
+## Revisión y auditoría
+
+La tabla permite corregir fechas, circulaciones y turnos antes de exportar. Los errores y conflictos no resueltos bloquean la descarga. La salida de auditoría conserva el documento y la página de origen, el motor usado, la confianza y las incidencias detectadas.
+
+El OCR es una ayuda y debe revisarse cuando las capturas estén recortadas, inclinadas o borrosas. Los PDF largos pueden tardar y consumir memoria, especialmente en móviles.
+
+## Pruebas
+
+Las pruebas unitarias están en `tests/run-tests.mjs`. El proyecto se ha validado también con las tres estructuras de circular proporcionadas: una fecha compacta, una fecha en muchas páginas y varias fechas en varias páginas.
+
+Consulta `THIRD_PARTY_NOTICES.md` para las versiones y licencias de las dependencias incluidas.
