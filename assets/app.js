@@ -1,5 +1,6 @@
 import { detectAssignments, normalizeService, validateRecord } from "./parser.js";
 import { detectCircularAssignments, validateCircularRecord } from "./circular-parser.js";
+import { classifyDocument, documentModeLabel, inferBookOffset } from "./document-detector.js";
 import { getPdfTextPage, loadPdf, renderPdfPage, renderPdfPreview } from "./pdf-engine.js";
 import { fileToCanvas, recognizeCanvas, renderImagePreview, terminateOcr } from "./ocr-engine.js";
 import {
@@ -16,7 +17,7 @@ const DEFAULT_RANGES = [
 
 const state = {
   files: [], pdfs: new Map(), records: [], specialBase: null, specialBaseFilename: "",
-  running: false, cancelRequested: false, rangeMode: "pdf"
+  running: false, cancelRequested: false, rangeMode: "pdf", effectiveMode: "", detectionCache: new Map()
 };
 
 const elements = Object.fromEntries([
@@ -35,6 +36,11 @@ function escapeHtml(value) {
 
 function selectedDocMode() {
   return document.querySelector('input[name="document-type"]:checked').value;
+}
+
+function activeMode() {
+  const selected = selectedDocMode();
+  return selected === "auto" ? state.effectiveMode : selected;
 }
 
 function selectedEngine() {
@@ -100,21 +106,32 @@ function resetSpecialBase() {
   elements["clear-special-base"].classList.add("hidden");
 }
 
-function updateMode() {
-  const circular = selectedDocMode() === "circular";
-  document.body.dataset.documentMode = circular ? "circular" : "book";
-  elements["book-config"].classList.toggle("hidden", circular);
-  elements["circular-config"].classList.toggle("hidden", !circular);
-  elements["export-regular"].classList.toggle("hidden", circular);
-  elements["file-help"].textContent = circular
-    ? "Puedes seleccionar una o varias circulares PDF. Se analizarán todas sus páginas."
-    : "Un PDF del libro o varias imágenes ordenadas.";
+function presentMode(mode = activeMode()) {
+  const selected = selectedDocMode();
+  const automatic = selected === "auto";
+  const circular = mode === "circular";
+  document.body.dataset.selectionMode = selected;
+  document.body.dataset.documentMode = mode || "auto";
+  elements["book-config"].classList.toggle("hidden", mode !== "book" || automatic);
+  elements["circular-config"].classList.toggle("hidden", mode === "book");
+  elements["export-regular"].classList.toggle("hidden", mode !== "book");
+  elements["file-help"].textContent = automatic
+    ? "Selecciona un PDF o varias circulares PDF. La aplicación identificará el tipo automáticamente."
+    : circular
+      ? "Puedes seleccionar una o varias circulares PDF. Se analizarán todas sus páginas."
+      : "Un PDF del libro o varias imágenes ordenadas.";
   elements["special-merge-title"].textContent = circular ? "Actualizar JSON especial anual" : "Actualizar servicios especiales";
   elements["special-merge-description"].textContent = circular
     ? "Carga el JSON anual actual. Las nuevas fechas y circulaciones se añadirán sin borrar las anteriores."
     : "Carga el JSON actual para conservarlo y añadir las nuevas asignaciones.";
+}
+
+function updateMode() {
+  state.effectiveMode = selectedDocMode() === "auto" ? "" : selectedDocMode();
+  presentMode();
   state.records = [];
   state.pdfs.clear();
+  state.detectionCache.clear();
   resetSpecialBase();
   elements["review-section"].classList.add("hidden");
   if (state.files.length) updateFileSelection(state.files);
@@ -124,19 +141,23 @@ function updateFileSelection(fileList) {
   const selected = [...fileList];
   const pdfs = selected.filter(isPdf);
   const images = selected.filter(file => !isPdf(file));
-  const circular = selectedDocMode() === "circular";
+  const selectionMode = selectedDocMode();
+  const circular = selectionMode === "circular";
   const invalidMix = pdfs.length && images.length;
-  const tooManyPdfs = !circular && pdfs.length > 1;
+  const tooManyPdfs = selectionMode === "book" && pdfs.length > 1;
   if (invalidMix || tooManyPdfs) {
     state.files = [];
     elements["file-input"].value = "";
     elements["file-summary"].textContent = "Ningún archivo seleccionado";
     elements.analyze.disabled = true;
-    setNotice(circular ? "Selecciona varias circulares PDF o un conjunto de imágenes, sin mezclar ambos formatos." : "Selecciona un único PDF o un conjunto de imágenes.", "error");
+    setNotice(selectionMode === "book" ? "Selecciona un único PDF o un conjunto de imágenes." : "Selecciona uno o varios PDF, o un conjunto de imágenes, sin mezclar ambos formatos.", "error");
     return;
   }
   state.files = selected;
   state.pdfs.clear();
+  state.detectionCache.clear();
+  state.effectiveMode = selectionMode === "auto" ? "" : selectionMode;
+  presentMode();
   state.records = [];
   elements.analyze.disabled = !selected.length;
   const kind = pdfs.length ? "PDF" : "imagen";
@@ -145,7 +166,7 @@ function updateFileSelection(fileList) {
   setNotice("");
   elements["review-section"].classList.add("hidden");
 
-  if (!circular) {
+  if (selectionMode === "book") {
     const newMode = pdfs.length ? "pdf" : "images";
     if (newMode !== state.rangeMode) {
       state.rangeMode = newMode;
@@ -153,7 +174,7 @@ function updateFileSelection(fileList) {
         elements["page-offset"].value = 0;
         setRanges([{ start: 1, end: Math.max(1, selected.length), serviceA: "0", serviceB: "100" }]);
       } else {
-        elements["page-offset"].value = 24;
+        elements["page-offset"].value = 0;
         setRanges(DEFAULT_RANGES);
       }
     } else if (newMode === "images" && elements["range-body"].rows.length === 1) {
@@ -186,16 +207,96 @@ function ocrStatus(message) {
   return names[message.status] || "Procesando imagen";
 }
 
-async function tokensForPdfPage(pdf, task, progress) {
+async function tokensForPdfPage(pdf, task, progress, keepForAnalysis = false) {
+  const cacheKey = `pdf-${task.fileIndex}-${task.physicalPage}`;
+  if (state.detectionCache.has(cacheKey)) {
+    const cached = state.detectionCache.get(cacheKey);
+    state.detectionCache.delete(cacheKey);
+    return cached;
+  }
+  let result;
   if (selectedEngine() !== "ocr") {
     const textPage = await getPdfTextPage(pdf, task.physicalPage);
     if (selectedEngine() === "text" || textPage.meaningfulTextItems >= 15) {
-      return { tokens: textPage.tokens, engine: "texto", width: textPage.viewport.width, height: textPage.viewport.height };
+      result = { tokens: textPage.tokens, engine: "texto", width: textPage.viewport.width, height: textPage.viewport.height };
     }
   }
-  const canvas = await renderPdfPage(pdf, task.physicalPage);
+  if (!result) {
+    const canvas = await renderPdfPage(pdf, task.physicalPage);
+    const ocr = await recognizeCanvas(canvas, progress);
+    result = { tokens: ocr.tokens, engine: "ocr", width: ocr.width, height: ocr.height };
+  }
+  if (keepForAnalysis) state.detectionCache.set(cacheKey, result);
+  return result;
+}
+
+async function tokensForImage(fileIndex, progress, keepForAnalysis = false) {
+  const cacheKey = `image-${fileIndex}`;
+  if (state.detectionCache.has(cacheKey)) {
+    const cached = state.detectionCache.get(cacheKey);
+    state.detectionCache.delete(cacheKey);
+    return cached;
+  }
+  const canvas = await fileToCanvas(state.files[fileIndex]);
   const ocr = await recognizeCanvas(canvas, progress);
-  return { tokens: ocr.tokens, engine: "ocr", width: ocr.width, height: ocr.height };
+  const result = { tokens: ocr.tokens, engine: "ocr", width: ocr.width, height: ocr.height };
+  if (keepForAnalysis) state.detectionCache.set(cacheKey, result);
+  return result;
+}
+
+async function detectAutomaticMode() {
+  const pdfMode = isPdf(state.files[0]);
+  if (selectedEngine() === "text" && !pdfMode) throw new Error("El motor de texto sólo puede utilizarse con PDF.");
+  const findings = [];
+
+  if (pdfMode) {
+    for (let fileIndex = 0; fileIndex < state.files.length; fileIndex += 1) {
+      const pdf = state.pdfs.get(fileIndex) || await loadPdf(state.files[fileIndex]);
+      state.pdfs.set(fileIndex, pdf);
+      const pages = [];
+      const samplePages = [1, 2, 3, 4].filter(page => page <= pdf.numPages);
+      for (let index = 0; index < samplePages.length; index += 1) {
+        const pageNumber = samplePages[index];
+        const task = { kind: "pdf", fileIndex, printedPage: pageNumber, physicalPage: pageNumber };
+        const data = await tokensForPdfPage(pdf, task, message => setProgress(
+          (fileIndex + (index + (message.progress || 0)) / samplePages.length) / state.files.length * 0.08,
+          `${ocrStatus(message)} · identificando ${state.files[fileIndex].name}`
+        ), true);
+        pages.push({ tokens: data.tokens });
+      }
+      findings.push({ file: state.files[fileIndex].name, ...classifyDocument(pages, { fileName: state.files[fileIndex].name, pageCount: pdf.numPages }) });
+    }
+  } else {
+    const pages = [];
+    const sampleCount = Math.min(3, state.files.length);
+    for (let fileIndex = 0; fileIndex < sampleCount; fileIndex += 1) {
+      const data = await tokensForImage(fileIndex, message => setProgress(
+        (fileIndex + (message.progress || 0)) / sampleCount * 0.08,
+        `${ocrStatus(message)} · identificando imagen ${fileIndex + 1}`
+      ), true);
+      pages.push({ tokens: data.tokens });
+    }
+    findings.push({ file: `${state.files.length} imagen${state.files.length === 1 ? "" : "es"}`, ...classifyDocument(pages, { pageCount: state.files.length }) });
+  }
+
+  const unresolved = findings.filter(item => !item.mode);
+  if (unresolved.length) {
+    throw new Error(`No se ha podido identificar automáticamente ${unresolved.map(item => item.file).join(", ")}. Selecciona Circular de servicio o Libro de itinerarios.`);
+  }
+  const modes = [...new Set(findings.map(item => item.mode))];
+  if (modes.length > 1) throw new Error("La selección mezcla circulares y libros. Analiza cada tipo por separado.");
+  if (modes[0] === "book" && state.files.length > 1) throw new Error("Los libros de itinerarios deben analizarse de uno en uno.");
+
+  state.effectiveMode = modes[0];
+  if (state.effectiveMode === "book") {
+    const inferredOffset = pdfMode ? inferBookOffset(state.pdfs.get(0)?.numPages) : 0;
+    elements["page-offset"].value = inferredOffset;
+    findings[0].bookOffset = inferredOffset;
+    state.rangeMode = pdfMode ? "pdf" : "images";
+    setRanges(pdfMode ? DEFAULT_RANGES : [{ start: 1, end: state.files.length, serviceA: "0", serviceB: "100" }]);
+  }
+  presentMode(state.effectiveMode);
+  return findings;
 }
 
 function bookPdfTasks(pdf, ranges) {
@@ -228,7 +329,7 @@ async function analyzeBook() {
   const ranges = collectRanges();
   const pdfMode = isPdf(state.files[0]);
   if (selectedEngine() === "text" && !pdfMode) throw new Error("El motor de texto sólo puede utilizarse con PDF.");
-  if (pdfMode) state.pdfs.set(0, await loadPdf(state.files[0]));
+  if (pdfMode && !state.pdfs.has(0)) state.pdfs.set(0, await loadPdf(state.files[0]));
   const tasks = pdfMode ? bookPdfTasks(state.pdfs.get(0), ranges) : bookImageTasks(ranges);
   for (let index = 0; index < tasks.length && !state.cancelRequested; index += 1) {
     const task = tasks[index];
@@ -238,9 +339,7 @@ async function analyzeBook() {
     if (task.kind === "pdf") {
       data = await tokensForPdfPage(state.pdfs.get(0), task, message => setProgress(base + (message.progress || 0) / tasks.length, `${ocrStatus(message)} · ${description}`));
     } else {
-      const canvas = await fileToCanvas(state.files[task.fileIndex]);
-      const ocr = await recognizeCanvas(canvas, message => setProgress(base + (message.progress || 0) / tasks.length, `${ocrStatus(message)} · ${description}`));
-      data = { tokens: ocr.tokens, engine: "ocr", width: ocr.width, height: ocr.height };
+      data = await tokensForImage(task.fileIndex, message => setProgress(base + (message.progress || 0) / tasks.length, `${ocrStatus(message)} · ${description}`));
     }
     const source = sourceInfo(task, data.engine, data.width, data.height);
     state.records.push(...detectAssignments(data.tokens, task.services, source));
@@ -263,7 +362,7 @@ async function analyzeCirculars() {
   if (pdfFiles.length) {
     totalPages = 0;
     for (let index = 0; index < state.files.length; index += 1) {
-      const pdf = await loadPdf(state.files[index]);
+      const pdf = state.pdfs.get(index) || await loadPdf(state.files[index]);
       state.pdfs.set(index, pdf);
       totalPages += pdf.numPages;
     }
@@ -288,9 +387,8 @@ async function analyzeCirculars() {
   } else {
     const pages = [];
     for (let fileIndex = 0; fileIndex < state.files.length && !state.cancelRequested; fileIndex += 1) {
-      const canvas = await fileToCanvas(state.files[fileIndex]);
       const base = completed / totalPages;
-      const ocr = await recognizeCanvas(canvas, message => setProgress(base + (message.progress || 0) / totalPages, `${ocrStatus(message)} · imagen ${fileIndex + 1}`));
+      const ocr = await tokensForImage(fileIndex, message => setProgress(base + (message.progress || 0) / totalPages, `${ocrStatus(message)} · imagen ${fileIndex + 1}`));
       const task = { kind: "image", fileIndex, printedPage: fileIndex + 1, physicalPage: fileIndex + 1 };
       pages.push({ tokens: ocr.tokens, ...sourceInfo(task, "ocr", ocr.width, ocr.height) });
       completed += 1;
@@ -306,6 +404,8 @@ async function analyze() {
   state.cancelRequested = false;
   state.records = [];
   state.pdfs.clear();
+  state.detectionCache.clear();
+  if (selectedDocMode() === "auto") state.effectiveMode = "";
   setNotice("");
   elements.analyze.disabled = true;
   elements.cancel.disabled = false;
@@ -314,11 +414,19 @@ async function analyze() {
   elements["review-section"].classList.add("hidden");
   setProgress(0, "Preparando documentos");
   try {
-    if (selectedDocMode() === "circular") await analyzeCirculars(); else await analyzeBook();
+    let automaticLabel = "";
+    if (selectedDocMode() === "auto") {
+      const findings = await detectAutomaticMode();
+      automaticLabel = `Detectado: ${documentModeLabel(state.effectiveMode)}`;
+      const evidence = [...new Set(findings.flatMap(item => item.evidence))].slice(0, 2);
+      if (evidence.length) automaticLabel += ` (${evidence.join(" · ")})`;
+      if (state.effectiveMode === "book") automaticLabel += ` · desfase ${findings[0].bookOffset}`;
+    }
+    if (activeMode() === "circular") await analyzeCirculars(); else await analyzeBook();
     await terminateOcr().catch(() => {});
     if (state.cancelRequested) setNotice(`Proceso detenido. Se conservan ${state.records.length} filas ya extraídas.`);
     else if (!state.records.length) setNotice("No se han detectado asignaciones válidas. Revisa el tipo de documento, el motor y la calidad del original.", "error");
-    else setNotice(`Extracción terminada: ${state.records.length} asignaciones preparadas para revisión.`);
+    else setNotice(`${automaticLabel ? `${automaticLabel}. ` : ""}Extracción terminada: ${state.records.length} asignaciones preparadas para revisión.`);
     renderReview();
   } catch (error) {
     await terminateOcr().catch(() => {});
@@ -333,7 +441,7 @@ async function analyze() {
 }
 
 function dynamicIssues() {
-  const circular = selectedDocMode() === "circular";
+  const circular = activeMode() === "circular";
   const analysis = circular ? analyzeCircularRecords(state.records) : analyzeRecords(state.records);
   const conflictsByRecord = new Map();
   for (const conflict of analysis.conflicts) {
@@ -365,7 +473,7 @@ function rowIssues(record, conflictsByRecord) {
 }
 
 function renderReview() {
-  const circular = selectedDocMode() === "circular";
+  const circular = activeMode() === "circular";
   elements["review-section"].classList.remove("hidden");
   const { analysis, conflictsByRecord, baseConflicts } = dynamicIssues();
   const issueRows = state.records.filter(record => rowIssues(record, conflictsByRecord).length).length;
@@ -424,7 +532,7 @@ function renderReview() {
 }
 
 function addManualRecord() {
-  if (selectedDocMode() === "circular") {
+  if (activeMode() === "circular") {
     state.records.unshift({
       id: crypto.randomUUID(), kind: "circular", sourceId: "manual", sourceName: "Entrada manual", sourceKind: "manual",
       fileIndex: -1, pageLabel: "—", physicalPage: null, engine: "manual", date: fallbackDate(), baseService: "",
@@ -461,7 +569,7 @@ async function showSource(record) {
 }
 
 async function exportKind(kind) {
-  if (selectedDocMode() === "circular") {
+  if (activeMode() === "circular") {
     const result = buildDatedSpecialJson(state.records, state.specialBase, elements["special-conflict-policy"].value);
     const blocking = result.invalid.length + result.internalConflicts.length + result.errors.length
       + (elements["special-conflict-policy"].value === "review" ? result.conflicts.length : 0);
@@ -502,7 +610,7 @@ async function exportKind(kind) {
 async function loadSpecialBase(file) {
   try {
     const parsed = JSON.parse(await file.text());
-    if (selectedDocMode() === "circular") {
+    if (activeMode() === "circular") {
       state.specialBase = validateDatedSpecialJson(parsed);
       elements["special-base-summary"].textContent = `${file.name} · ${state.specialBase.dateCount} fechas · ${state.specialBase.assignments} asignaciones conservadas`;
     } else {
