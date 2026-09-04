@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111111">
-  <meta name="description" content="Extractor local de circulaciones y turnos desde libros y circulares para SIM+.">
+  <meta name="description" content="Extractor local con detección automática de libros y circulares de turnos para SIM+.">
   <title>SIM+ · Extractor de turnos</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
@@ -27,7 +27,8 @@
 
       <fieldset class="document-choice">
         <legend>Tipo de documento</legend>
-        <label><input type="radio" name="document-type" value="circular" checked><span><strong>CIRCULAR DE SERVICIO</strong><small>Una o varias fechas; tablas TORN y turnos modificados.</small></span></label>
+        <label><input type="radio" name="document-type" value="auto" checked><span><strong>AUTOMÁTICO</strong><small>Identifica si es una circular o un libro y aplica su configuración.</small></span></label>
+        <label><input type="radio" name="document-type" value="circular"><span><strong>CIRCULAR / PDF DE TURNOS</strong><small>Una o varias fechas; tablas TORN y turnos modificados.</small></span></label>
         <label><input type="radio" name="document-type" value="book"><span><strong>LIBRO DE ITINERARIOS</strong><small>Bloques ordinarios 0/100, 400/500, 200/300 y 800/900.</small></span></label>
       </fieldset>
 
@@ -51,14 +52,14 @@
           <div id="book-config">
             <label class="field compact">
               <span>Páginas preliminares</span>
-              <input id="page-offset" type="number" min="0" value="24" inputmode="numeric">
-              <small>Desfase entre la página impresa y la página física del PDF.</small>
+              <input id="page-offset" type="number" min="0" value="0" inputmode="numeric">
+              <small>Desfase entre la página impresa y la página física. En los libros de referencia es 0.</small>
             </label>
           </div>
 
           <div id="circular-config">
             <label class="field compact">
-              <span>Fecha manual de respaldo</span>
+              <span>Fecha manual de respaldo (circulares)</span>
               <input id="fallback-date" type="date">
               <small>Déjala vacía: sólo se utilizará si la circular no permite leer la fecha.</small>
             </label>

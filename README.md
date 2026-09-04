@@ -1,10 +1,20 @@
-# SIM+ Turnos Extractor 1.1
+# SIM+ Turnos Extractor 1.2
 
 Aplicación web estática para extraer circulaciones y turnos desde libros de itinerarios, circulares PDF y capturas de pantalla. Todo se procesa en el navegador: los documentos, el JSON existente y los resultados no se envían a ningún servidor.
 
+## Detección automática
+
+La opción predeterminada **Automático** identifica el tipo de documento antes de extraerlo:
+
+- las órdenes de servicio y circulares fechadas —incluidos los ejemplos de Sabadell y Vallvidrera— se procesan como servicio especial por fecha operativa;
+- el libro de itinerarios BV se procesa por los bloques ordinarios `0/100`, `400/500`, `200/300` y `800/900`;
+- el motor de lectura automático utiliza texto PDF cuando existe y cambia a OCR cuando el documento está escaneado.
+
+En el libro completo de referencia se aplican directamente los bloques `5–102`, `105–158`, `161–222` y `225–294`. La aplicación determina también si el PDF usa esas páginas físicas (`desfase 0`) o si incorpora 24 páginas preliminares (`desfase 24`). No es necesario configurar los bloques. Las opciones **Circular de servicio** y **Libro de itinerarios** permanecen disponibles para forzar manualmente el formato si un documento excepcional no puede identificarse.
+
 ## Circulares de servicios especiales
 
-El modo **Circular de servicio** admite:
+El tratamiento de **Circular de servicio** admite:
 
 - una fecha de afectación en una sola hoja;
 - una fecha distribuida entre varias hojas;

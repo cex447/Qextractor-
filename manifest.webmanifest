@@ -1,7 +1,7 @@
 {
   "name": "SIM+ Extractor de turnos",
   "short_name": "SIM+ Extractor",
-  "description": "Extracción local de circulaciones y turnos desde libros y circulares PDF o imágenes, con actualización acumulativa del JSON especial.",
+  "description": "Detección y extracción local automática de circulaciones y turnos desde libros y circulares PDF o imágenes.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
