@@ -40,6 +40,19 @@ main { max-width: 1240px; margin: 0 auto; padding: 44px 28px 80px; }
 .section-heading p, .panel-title p, .export-panel p { margin: 4px 0 0; color: var(--muted); }
 .step { font: 800 .72rem/1 Arial, sans-serif; letter-spacing: .12em; color: var(--muted); }
 
+.document-choice {
+  border: 0; margin: 0 0 18px; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+}
+.document-choice legend { margin-bottom: 9px; font-size: .8rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.document-choice input { position: absolute; opacity: 0; }
+.document-choice > label > span {
+  min-height: 72px; padding: 14px 16px; display: grid; align-content: center; gap: 5px;
+  border: 1px solid var(--line); background: white;
+}
+.document-choice strong { font-size: .84rem; letter-spacing: .05em; }
+.document-choice small { color: var(--muted); line-height: 1.35; }
+.document-choice input:checked + span { border: 2px solid var(--ink); padding: 13px 15px; background: var(--soft); }
+
 .input-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .75fr); gap: 18px; }
 .dropzone {
   min-height: 258px; border: 1px dashed #777; background: linear-gradient(135deg, #fafafa, #f1f1f1);
@@ -69,6 +82,7 @@ main { max-width: 1240px; margin: 0 auto; padding: 44px 28px 80px; }
 .privacy-note { border-left: 4px solid var(--green); background: #edf8f4; padding: 13px 14px; display: grid; gap: 4px; font-size: .84rem; line-height: 1.35; }
 
 .ranges-panel { margin-top: 18px; border: 1px solid var(--line); }
+body[data-document-mode="circular"] .book-only { display: none !important; }
 .panel-title { padding: 18px 20px; display: flex; justify-content: space-between; gap: 20px; align-items: center; border-bottom: 1px solid var(--line); }
 .panel-title h2 { font-size: 1rem; }
 .panel-title p { font-size: .84rem; }
@@ -106,6 +120,7 @@ table { border-collapse: collapse; width: 100%; }
 .search-field { flex: 1; }
 .issue-filter { display: flex; align-items: center; gap: 8px; padding: 0 13px; border: 1px solid var(--line); font-size: .72rem; font-weight: 800; white-space: nowrap; }
 .review-table { min-width: 1040px; border: 1px solid var(--line); }
+body[data-document-mode="circular"] .review-table { min-width: 760px; }
 .review-table td { vertical-align: top; }
 .review-table tr.has-issue { background: #fff5f5; }
 .review-table input { min-height: 38px; padding: 6px 8px; }
@@ -158,6 +173,7 @@ dialog::backdrop { background: rgba(0,0,0,.62); }
   .section-heading { display: block; }
   .section-heading > p { margin: 10px 0 0 32px; }
   .input-grid { grid-template-columns: 1fr; }
+  .document-choice { grid-template-columns: 1fr; }
   .dropzone { min-height: 218px; }
   .panel-title, .export-panel { align-items: stretch; flex-direction: column; }
   .panel-title .button { width: 100%; }

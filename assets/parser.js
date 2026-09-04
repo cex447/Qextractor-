@@ -82,8 +82,9 @@ function explodeToken(token) {
     const embeddedTrains = [...text.toUpperCase().matchAll(/[ABLDF][0-9OQDIL|ZSBG]{3}/g)];
     if (embeddedTrains.length > 1) matches = embeddedTrains;
   }
-  return matches.map(match => ({
+  return matches.map((match, partIndex) => ({
     ...token,
+    id: `${token.id}-${match.index ?? partIndex}`,
     text: match[0],
     x: token.x + match.index * charWidth,
     width: match[0].length * charWidth
