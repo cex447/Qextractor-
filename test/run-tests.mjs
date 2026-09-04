@@ -6,7 +6,10 @@ import {
   normalizeTurn,
   parseTurnExpression
 } from "../assets/parser.js";
-import { buildJson, mergeSpecialJson, validateSpecialJson } from "../assets/exporter.js";
+import { datesFromLine, detectCircularAssignments, validateCircularRecord } from "../assets/circular-parser.js";
+import {
+  buildDatedSpecialJson, buildJson, mergeSpecialJson, validateDatedSpecialJson, validateSpecialJson
+} from "../assets/exporter.js";
 
 assert.equal(normalizeCirculation("F012").value, "F012");
 assert.equal(normalizeCirculation("H801"), null);
@@ -82,4 +85,69 @@ assert.throws(
   /no es especial/
 );
 
-console.log("OK · parser, exportación y combinación de servicios especiales");
+assert.deepEqual(datesFromLine("Torns modificats SERVEI 400 (dia 12 de setembre de 2026)"), ["12/09/2026"]);
+assert.deepEqual(datesFromLine("Servei 100 dia 04-09-26"), ["04/09/2026"]);
+assert.equal(validateCircularRecord({ date: "11/09/2026", circulation: "D001", turn: "N13" }).valid, true);
+
+const circularSynthetic = detectCircularAssignments([[
+  {
+    sourceId: "circular", sourceName: "circular.pdf", sourceKind: "pdf", fileIndex: 0,
+    pageLabel: 1, physicalPage: 1, engine: "texto", sourceWidth: 300, sourceHeight: 180,
+    tokens: [
+      { id: "date", text: "Servei especial dia 11 de setembre de 2026", x: 10, y: 5, width: 190, height: 10, confidence: 100 },
+      { id: "d", text: "D001", x: 88, y: 30, width: 24, height: 10, confidence: 100 },
+      { id: "f", text: "F001", x: 188, y: 30, width: 24, height: 10, confidence: 100 },
+      { id: "siv1", text: "L12B", x: 88, y: 48, width: 24, height: 10, confidence: 100 },
+      { id: "siv2", text: "L12B", x: 188, y: 48, width: 24, height: 10, confidence: 100 },
+      { id: "torn", text: "TORN", x: 5, y: 70, width: 35, height: 10, confidence: 100 },
+      { id: "t1", text: "015", x: 88, y: 70, width: 24, height: 10, confidence: 100 },
+      { id: "t2", text: "019", x: 188, y: 70, width: 24, height: 10, confidence: 100 }
+    ]
+  }
+]]);
+assert.deepEqual(circularSynthetic.map(row => [row.date, row.circulation, row.turn]), [
+  ["11/09/2026", "D001", "015"],
+  ["11/09/2026", "F001", "019"]
+]);
+
+const datedBase = validateDatedSpecialJson({
+  year: 2026,
+  date_format: "DD/MM/YYYY",
+  dates: {
+    "01/01/2026": { "A001": "001" },
+    "11/09/2026": { "D001": "313", "F001": "019" }
+  }
+});
+assert.throws(
+  () => validateDatedSpecialJson({ year: 2026, dates: { "32/09/2026": {} } }),
+  /no es válida/
+);
+assert.throws(
+  () => validateDatedSpecialJson({ year: 2025, dates: { "01/01/2026": {} } }),
+  /declara el año/
+);
+const circularRecords = [
+  { id: "c1", kind: "circular", date: "11/09/2026", circulation: "D001", turn: "015", sourceName: "Os2026071BV.pdf", issues: [] },
+  { id: "c2", kind: "circular", date: "11/09/2026", circulation: "A002", turn: "205", sourceName: "Os2026071BV.pdf", issues: [] }
+];
+const datedBlocked = buildDatedSpecialJson(circularRecords, datedBase, "review");
+assert.equal(datedBlocked.conflicts.length, 1);
+assert.equal(datedBlocked.payload.dates["01/01/2026"].A001, "001");
+assert.equal(datedBlocked.payload.dates["11/09/2026"].D001, "313");
+assert.equal(datedBlocked.payload.dates["11/09/2026"].A002, "205");
+const datedReplaced = buildDatedSpecialJson(circularRecords, datedBase, "new");
+assert.equal(datedReplaced.payload.dates["11/09/2026"].D001, "015");
+
+const wrappedBase = validateDatedSpecialJson({
+  year: 2026,
+  date_format: "DD/MM/YYYY",
+  dates: { "12/09/2026": { service: "400", circulations: { "A123": "118" } } }
+});
+const wrapped = buildDatedSpecialJson([
+  { id: "c3", kind: "circular", date: "12/09/2026", circulation: "A902", turn: "R02", sourceName: "Os2026074BV.pdf", issues: [] }
+], wrappedBase, "new");
+assert.equal(wrapped.payload.dates["12/09/2026"].service, "400");
+assert.equal(wrapped.payload.dates["12/09/2026"].circulations.A123, "118");
+assert.equal(wrapped.payload.dates["12/09/2026"].circulations.A902, "R02");
+
+console.log("OK · libro, circulares y combinación acumulativa del JSON especial");
