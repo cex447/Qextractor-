@@ -7,6 +7,7 @@ import {
   parseTurnExpression
 } from "../assets/parser.js";
 import { datesFromLine, detectCircularAssignments, validateCircularRecord } from "../assets/circular-parser.js";
+import { classifyDocument, documentModeLabel, inferBookOffset } from "../assets/document-detector.js";
 import {
   buildDatedSpecialJson, buildJson, mergeSpecialJson, validateDatedSpecialJson, validateSpecialJson
 } from "../assets/exporter.js";
@@ -18,6 +19,21 @@ assert.equal(normalizeTurn("S02").value, "S02");
 assert.equal(normalizeTurn("RR8").value, "RR8");
 assert.equal(isSpecialService("601"), true);
 assert.equal(isSpecialService("500"), false);
+
+const textPage = text => ({ tokens: [{ text, x: 0, y: 0 }] });
+assert.equal(classifyDocument([
+  textPage("Ordre de Servei Os2026066BV Reforç al servei Torns modificats dia 4 de setembre de 2026")
+], { fileName: "os2026066BV.pdf", pageCount: 14 }).mode, "circular");
+assert.equal(classifyDocument([
+  textPage("Ordre de Servei Os2026074BV Reforç al servei per la Festa Major de Vallvidrera")
+], { fileName: "os2026074BV.pdf", pageCount: 4 }).mode, "circular");
+assert.equal(classifyDocument([
+  textPage("Llibre d'itineraris itinerari BV07 Servei 0/100 Pàg. Tren següent")
+], { fileName: "Lit202403.pdf", pageCount: 294 }).mode, "book");
+assert.equal(classifyDocument([textPage("document sense marques")], { pageCount: 2 }).mode, null);
+assert.equal(documentModeLabel("book"), "libro de itinerarios");
+assert.equal(inferBookOffset(294), 0);
+assert.equal(inferBookOffset(318), 24);
 
 assert.deepEqual(
   parseTurnExpression("001", ["0", "100"]).assignments,
