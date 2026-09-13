@@ -1,4 +1,4 @@
-const CACHE = "sim-turnos-extractor-v1.2.0";
+const CACHE = "sim-turnos-extractor-v1.3.0";
 const SHELL = [
   "./",
   "./index.html",

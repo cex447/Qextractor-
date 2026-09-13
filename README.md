@@ -1,4 +1,12 @@
-# SIM+ Turnos Extractor 1.2
+# SIM+ Turnos Extractor 1.3
+
+## Cambios de esta versión
+
+- Par 600/700: detección desde «Servei» y botón para añadir un bloque manual con sus páginas.
+- En Automático, los libros se recorren por páginas físicas y el servicio se lee de cada página. Ya no se deduce el servicio ni el desfase por la longitud del PDF. Si una tabla TORN no permite leer Servei, se solicita configurar el bloque manualmente.
+- Los códigos específicos (707, 203, etc.) no se redondean. Las circulares se procesan por fecha operativa, independientemente de la familia del servicio; no se inventan turnos a partir del servicio ordinario.
+- Interfaz clara u oscura según el modo del dispositivo, con actualización inmediata. Los documentos de origen mantienen sus colores.
+- Se conserva la combinación acumulativa del JSON especial y la revisión de conflictos.
 
 Aplicación web estática para extraer circulaciones y turnos desde libros de itinerarios, circulares PDF y capturas de pantalla. Todo se procesa en el navegador: los documentos, el JSON existente y los resultados no se envían a ningún servidor.
 
@@ -7,10 +15,10 @@ Aplicación web estática para extraer circulaciones y turnos desde libros de it
 La opción predeterminada **Automático** identifica el tipo de documento antes de extraerlo:
 
 - las órdenes de servicio y circulares fechadas —incluidos los ejemplos de Sabadell y Vallvidrera— se procesan como servicio especial por fecha operativa;
-- el libro de itinerarios BV se procesa por los bloques ordinarios `0/100`, `400/500`, `200/300` y `800/900`;
+- el libro de itinerarios BV se procesa leyendo «Servei», incluidos los pares `0/100`, `400/500`, `200/300`, `600/700` y `800/900`;
 - el motor de lectura automático utiliza texto PDF cuando existe y cambia a OCR cuando el documento está escaneado.
 
-En el libro completo de referencia se aplican directamente los bloques `5–102`, `105–158`, `161–222` y `225–294`. La aplicación determina también si el PDF usa esas páginas físicas (`desfase 0`) o si incorpora 24 páginas preliminares (`desfase 24`). No es necesario configurar los bloques. Las opciones **Circular de servicio** y **Libro de itinerarios** permanecen disponibles para forzar manualmente el formato si un documento excepcional no puede identificarse.
+En Automático no es necesario configurar bloques ni desfase. En modo manual se mantienen los rangos del libro de referencia y se puede añadir 600/700 indicando sus páginas. Las opciones **Circular / PDF de turnos** y **Libro de itinerarios** permiten forzar el formato si no puede identificarse.
 
 ## Circulares de servicios especiales
 
