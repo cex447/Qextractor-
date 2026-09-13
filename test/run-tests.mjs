@@ -7,7 +7,7 @@ import {
   parseTurnExpression
 } from "../assets/parser.js";
 import { datesFromLine, detectCircularAssignments, validateCircularRecord } from "../assets/circular-parser.js";
-import { classifyDocument, documentModeLabel, inferBookOffset } from "../assets/document-detector.js";
+import { classifyDocument, documentModeLabel, inferBookOffset, servicesOnPage } from "../assets/document-detector.js";
 import {
   buildDatedSpecialJson, buildJson, mergeSpecialJson, validateDatedSpecialJson, validateSpecialJson
 } from "../assets/exporter.js";
@@ -167,3 +167,21 @@ assert.equal(wrapped.payload.dates["12/09/2026"].circulations.A123, "118");
 assert.equal(wrapped.payload.dates["12/09/2026"].circulations.A902, "R02");
 
 console.log("OK · libro, circulares y combinación acumulativa del JSON especial");
+
+const serviceTokens = value => [
+  {text: 'Servei', x: 10, y: 700, height: 10},
+  {text: value, x: 60, y: 700, height: 10}
+];
+assert.deepEqual(servicesOnPage(serviceTokens('600/700')), ['600', '700']);
+assert.deepEqual(servicesOnPage(serviceTokens('707')), ['707']);
+assert.deepEqual(servicesOnPage(serviceTokens('203')), ['203']);
+assert.deepEqual(servicesOnPage(serviceTokens('600 / 700')), ['600', '700']);
+assert.deepEqual(parseTurnExpression('001-6 323-7', ['600', '700']).assignments, {600:'001',700:'323'});
+const datedSpecific = buildDatedSpecialJson([
+  {id:'707',kind:'circular',date:'11/09/2026',baseService:'707',circulation:'D001',turn:'015'},
+  {id:'203',kind:'circular',date:'12/09/2026',baseService:'203',circulation:'D001',turn:'203'}
+], datedBase, 'new');
+assert.equal(datedSpecific.payload.dates['11/09/2026'].D001, '015');
+assert.equal(datedSpecific.payload.dates['12/09/2026'].D001, '203');
+assert.equal(datedSpecific.payload.dates['01/01/2026'].A001, '001');
+console.log('OK · 600/700 y circulares de días 707/203 sin pérdida de fechas anteriores');
