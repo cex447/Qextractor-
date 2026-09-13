@@ -1,6 +1,6 @@
 import { detectAssignments, normalizeService, validateRecord } from "./parser.js";
 import { detectCircularAssignments, validateCircularRecord } from "./circular-parser.js";
-import { classifyDocument, documentModeLabel, inferBookOffset } from "./document-detector.js";
+import { classifyDocument, documentModeLabel, inferBookOffset, servicesOnPage } from "./document-detector.js";
 import { getPdfTextPage, loadPdf, renderPdfPage, renderPdfPreview } from "./pdf-engine.js";
 import { fileToCanvas, recognizeCanvas, renderImagePreview, terminateOcr } from "./ocr-engine.js";
 import {
@@ -285,11 +285,11 @@ async function detectAutomaticMode() {
   }
   const modes = [...new Set(findings.map(item => item.mode))];
   if (modes.length > 1) throw new Error("La selección mezcla circulares y libros. Analiza cada tipo por separado.");
-  if (modes[0] === "book" && state.files.length > 1) throw new Error("Los libros de itinerarios deben analizarse de uno en uno.");
+  if (modes[0] === "book" && pdfMode && state.files.length > 1) throw new Error("Los libros de itinerarios deben analizarse de uno en uno.");
 
   state.effectiveMode = modes[0];
   if (state.effectiveMode === "book") {
-    const inferredOffset = pdfMode ? inferBookOffset(state.pdfs.get(0)?.numPages) : 0;
+    const inferredOffset = 0;
     elements["page-offset"].value = inferredOffset;
     findings[0].bookOffset = inferredOffset;
     state.rangeMode = pdfMode ? "pdf" : "images";
@@ -330,7 +330,10 @@ async function analyzeBook() {
   const pdfMode = isPdf(state.files[0]);
   if (selectedEngine() === "text" && !pdfMode) throw new Error("El motor de texto sólo puede utilizarse con PDF.");
   if (pdfMode && !state.pdfs.has(0)) state.pdfs.set(0, await loadPdf(state.files[0]));
-  const tasks = pdfMode ? bookPdfTasks(state.pdfs.get(0), ranges) : bookImageTasks(ranges);
+  const automatic = selectedDocMode() === "auto";
+  const tasks = automatic && pdfMode
+    ? Array.from({ length: state.pdfs.get(0).numPages }, (_, index) => ({ kind: "pdf", fileIndex: 0, printedPage: index + 1, physicalPage: index + 1, services: [] }))
+    : pdfMode ? bookPdfTasks(state.pdfs.get(0), ranges) : bookImageTasks(ranges);
   for (let index = 0; index < tasks.length && !state.cancelRequested; index += 1) {
     const task = tasks[index];
     const base = index / tasks.length;
@@ -342,6 +345,16 @@ async function analyzeBook() {
       data = await tokensForImage(task.fileIndex, message => setProgress(base + (message.progress || 0) / tasks.length, `${ocrStatus(message)} · ${description}`));
     }
     const source = sourceInfo(task, data.engine, data.width, data.height);
+    if (automatic) {
+      const services = servicesOnPage(data.tokens);
+      if (!services.length) {
+        if (data.tokens.some(token => /^TORN$/i.test(token.text.trim()))) {
+          throw new Error(`No se puede leer Servei en la página ${task.physicalPage}. Selecciona Libro de itinerarios y configura ese bloque manualmente.`);
+        }
+        continue;
+      }
+      task.services = services;
+    }
     state.records.push(...detectAssignments(data.tokens, task.services, source));
     setProgress((index + 1) / tasks.length, `Analizada ${description}`);
   }
@@ -420,7 +433,7 @@ async function analyze() {
       automaticLabel = `Detectado: ${documentModeLabel(state.effectiveMode)}`;
       const evidence = [...new Set(findings.flatMap(item => item.evidence))].slice(0, 2);
       if (evidence.length) automaticLabel += ` (${evidence.join(" · ")})`;
-      if (state.effectiveMode === "book") automaticLabel += ` · desfase ${findings[0].bookOffset}`;
+      if (state.effectiveMode === "book") automaticLabel += " · servicio leído de cada página";
     }
     if (activeMode() === "circular") await analyzeCirculars(); else await analyzeBook();
     await terminateOcr().catch(() => {});
@@ -633,6 +646,10 @@ elements.dropzone.addEventListener("dragleave", () => elements.dropzone.classLis
 elements.dropzone.addEventListener("drop", event => { event.preventDefault(); elements.dropzone.classList.remove("dragging"); updateFileSelection(event.dataTransfer.files); });
 document.querySelectorAll('input[name="document-type"]').forEach(input => input.addEventListener("change", updateMode));
 elements["add-range"].addEventListener("click", () => addRangeRow());
+document.getElementById("add-special-range").addEventListener("click", () => {
+  addRangeRow({ start: "", end: "", serviceA: "600", serviceB: "700" });
+  setNotice("Bloque 600/700 añadido. Indica sus páginas inicial y final; no se asignan páginas supuestas.");
+});
 elements.analyze.addEventListener("click", analyze);
 elements.cancel.addEventListener("click", () => { state.cancelRequested = true; elements.cancel.disabled = true; setNotice("Se detendrá al terminar la página actual."); });
 elements.search.addEventListener("input", renderReview);

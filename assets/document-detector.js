@@ -37,7 +37,7 @@ export function classifyDocument(pages, { fileName = "", pageCount = pages.lengt
   if (/LLIBRE D['’ ]?ITINERARIS|LIBRO DE ITINERARIOS/.test(text)) addEvidence(book, 9, "Llibre d’itineraris");
   if (/ITINERARI\s+BV\d+/.test(text)) addEvidence(book, 7, "itinerari BV");
   if (/PAG\.?\s*TREN SEGUENT|TREN SEGUENT/.test(text)) addEvidence(book, 4, "referencias al tren siguiente");
-  if (/SERVEI\s+(?:0\s*\/\s*100|400\s*\/\s*500|200\s*\/\s*300|800\s*\/\s*900)/.test(text)) {
+  if (/SERVEI\s+(?:0\s*\/\s*100|400\s*\/\s*500|200\s*\/\s*300|600\s*\/\s*700|800\s*\/\s*900)/.test(text)) {
     addEvidence(book, 6, "par de servicios ordinarios");
   }
   if (/\bTORN\b/.test(text) && /CODI SIV/.test(text) && circular.score === 0) {
@@ -63,4 +63,18 @@ export function documentModeLabel(mode) {
 
 export function inferBookOffset(pageCount) {
   return Number(pageCount) >= 318 ? 24 : 0;
+}
+
+// Read the printed service, never round 707 to 700 or 203 to 200.
+export function servicesOnPage(tokens) {
+  const labels = tokens.filter(token => /^servei:?$/i.test(token.text.trim()));
+  for (const label of labels.sort((a, b) => b.y - a.y)) {
+    const height = Math.max(1, label.height || 10);
+    const nearby = tokens.filter(token => token !== label && token.x >= label.x
+      && token.x < label.x + height * 25 && Math.abs(token.y - label.y) < height * 1.5)
+      .sort((a, b) => a.x - b.x).map(token => token.text).join(' ');
+    const match = nearby.match(/^\s*(\d{1,3})(?:\s*[\/–-]\s*(\d{1,3}))?(?=\s|$)/);
+    if (match) return [match[1], match[2]].filter(Boolean).map(value => String(Number(value)));
+  }
+  return [];
 }

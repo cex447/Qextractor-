@@ -193,3 +193,37 @@ dialog::backdrop { background: rgba(0,0,0,.62); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Follow the device mode, including changes while the application is open.
+   Source document canvases deliberately retain their original colours. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #f5f5f5; --paper: #000000; --soft: #202020;
+    --muted: #b6b6b6; --line: #555555;
+    --red: #ff777d; --amber: #ffc16b; --green: #56cca4; --blue: #94b7ff;
+  }
+  .topbar { background: rgba(0,0,0,.94); }
+  .document-choice > label > span,
+  .field input, .range-table input, .review-table input, .search-field input,
+  .button, .file-button, .conflict-policy select, dialog {
+    background: #131313; color: var(--ink);
+  }
+  .dropzone { background: linear-gradient(135deg, #191919, #111111); }
+  .dropzone:hover, .dropzone.dragging { background: #252525; }
+  .document-choice input:checked + span { background: var(--soft); }
+  .engine-choice input:checked + span, .file-summary, .button.primary {
+    background: var(--ink); color: #000000;
+  }
+  .button.special { background: #2457bc; color: #ffffff; border-color: #94b7ff; }
+  .button.ghost { background: transparent; }
+  .button.danger { color: var(--red); }
+  .privacy-note { background: #102b22; }
+  .special-merge-panel { background: #121e32; }
+  .review-table tr.has-issue, .notice.error, .icon-button:hover { background: #321619; }
+  .notice.error { color: #ffb3b6; }
+  .progress-track { background: #444444; }
+  .export-panel { background: #1b1b1b; color: var(--ink); border: 1px solid var(--line); }
+  .source-canvas-wrap { background: #242424; }
+  .dialog-header button { color: var(--ink); }
+}
