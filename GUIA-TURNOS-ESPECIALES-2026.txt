@@ -1,0 +1,75 @@
+SIM+ · GUÍA RÁPIDA DE TURNOS ESPECIALES 2026
+
+ARCHIVO A EDITAR
+
+data/sim-turnos-especiales-2026.json
+
+La clave de cada fecha debe escribirse como DD/MM/YYYY. Dentro de esa fecha,
+cada propiedad es una circulación y cada valor es el turno que la realiza.
+Se admite el turno con Q o sin Q; para facilitar la edición se recomienda
+escribir sólo sus tres caracteres.
+
+EJEMPLO COMPLETO PARA DOS DÍAS
+
+{
+  "year": 2026,
+  "date_format": "DD/MM/YYYY",
+  "dates": {
+    "11/09/2026": {
+      "A101": "001",
+      "A103": "001",
+      "D201": "P03",
+      "F901": "204"
+    },
+    "24/09/2026": {
+      "B701": "014",
+      "L801": "F02"
+    }
+  }
+}
+
+QUÉ REPRESENTA CADA LÍNEA
+
+"A101": "001" significa que la circulación A101 la realiza el turno Q001.
+"D201": "P03" significa que la circulación D201 la realiza el turno QP03.
+
+NUEVOS TURNOS O NUEVAS CIRCULACIONES
+
+No necesitan una declaración adicional. Basta con añadir cada circulación al
+día correspondiente y asignarle sus tres caracteres de turno. Si un turno
+realiza varias circulaciones, se repite el mismo valor en todas ellas:
+
+"A101": "001",
+"A103": "001",
+"A105": "001"
+
+CAMBIAR UNA CIRCULACIÓN DE TURNO
+
+Se modifica únicamente el valor de esa circulación dentro de la fecha. Por
+ejemplo, para pasar D201 de QP03 a QR05:
+
+"D201": "R05"
+
+QUITAR UNA CIRCULACIÓN ESE DÍA
+
+Se elimina por completo su pareja "circulación": "turno" del bloque de la
+fecha. No se debe dejar una cadena vacía ni null.
+
+REGLAS DE VALIDACIÓN
+
+- Circulación: exactamente una letra A, B, D, F o L y tres cifras.
+- Turno: exactamente tres caracteres alfanuméricos después de Q.
+- La última cifra del turno determina MATÍ (impar) o TARDA (par).
+- El primer carácter determina la dependencia:
+  0/P = PL. CATALUNYA, 1/S = SARRIÀ, 2/R = RUBÍ,
+  3/N = TERRASSA y 4/F = SABADELL.
+- No usar comentarios, comas finales ni dos veces la misma circulación.
+- En servicios 6xx/7xx el bloque de la fecha debe incluir todas las
+  circulaciones cuyos turnos se quieran mostrar. Lo que no conste se verá Q?.
+- El cambio de día ferroviario se produce a las 03:00.
+
+ANTES DE PUBLICAR
+
+Compruebe que el JSON conserva una única llave final para dates y otra para el
+documento, y valídelo con un comprobador JSON. SIM+ lee automáticamente el
+archivo correspondiente al año operacional en curso.
